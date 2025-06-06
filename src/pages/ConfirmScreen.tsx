@@ -1,0 +1,193 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { formatCoordinates } from '../utils/gps';
+import { formatTimestamp } from '../utils/timestamp';
+import { uploadMedia } from '../utils/supabase';
+
+interface CaptureData {
+  image: string;
+  location: {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+  };
+  timestamps: {
+    local: string;
+    utc: string;
+  };
+}
+
+const ConfirmScreen = () => {
+  const navigate = useNavigate();
+  const [captureData, setCaptureData] = useState<CaptureData | null>(null);
+  const [uploaderName, setUploaderName] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    // Check environment variables
+    console.log('Environment check:', {
+      hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+      hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+    });
+
+    const storedData = sessionStorage.getItem('captureData');
+    if (!storedData) {
+      navigate('/');
+      return;
+    }
+    setCaptureData(JSON.parse(storedData));
+  }, [navigate]);
+
+  const handleConfirm = async () => {
+    if (!captureData) return;
+
+    setIsUploading(true);
+    setError('');
+    
+    try {
+      console.log('Starting upload process...');
+      console.log('Environment variables:', {
+        url: import.meta.env.VITE_SUPABASE_URL,
+        hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+        keyLength: import.meta.env.VITE_SUPABASE_ANON_KEY?.length
+      });
+      
+      // Convert base64 to File object
+      console.log('Converting base64 to File...');
+      const response = await fetch(captureData.image);
+      const blob = await response.blob();
+      const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+      console.log('File created:', {
+        size: file.size,
+        type: file.type,
+        name: file.name
+      });
+
+      // Upload to Supabase
+      console.log('Uploading to Supabase...');
+      const result = await uploadMedia(file, {
+        timestamp_local: captureData.timestamps.local,
+        timestamp_utc: captureData.timestamps.utc,
+        gps_lat: captureData.location.latitude,
+        gps_lng: captureData.location.longitude,
+        uploader_name: isAnonymous ? undefined : uploaderName,
+      });
+
+      console.log('Upload successful:', result);
+
+      // Store the result in session storage for the post-publish screen
+      sessionStorage.setItem('uploadResult', JSON.stringify(result));
+      navigate('/published');
+    } catch (error) {
+      console.error('Upload failed:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        details: error
+      });
+      setError(`Failed to upload media: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (!captureData) {
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-md mx-auto space-y-6">
+        {/* Preview */}
+        <div className="bg-white rounded-lg overflow-hidden shadow-sm">
+          <img
+            src={captureData.image}
+            alt="Captured photo"
+            className="w-full h-64 object-cover"
+          />
+        </div>
+
+        {/* Metadata */}
+        <div className="bg-white p-4 rounded-lg shadow-sm space-y-4">
+          <div>
+            <h3 className="text-sm font-medium text-gray-500">Location</h3>
+            <p className="mt-1 text-gray-900">
+              {formatCoordinates(captureData.location.latitude, captureData.location.longitude)}
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium text-gray-500">Local Time</h3>
+            <p className="mt-1 text-gray-900">
+              {formatTimestamp(captureData.timestamps.local)}
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium text-gray-500">UTC Time</h3>
+            <p className="mt-1 text-gray-900">
+              {formatTimestamp(captureData.timestamps.utc, 'utc')}
+            </p>
+          </div>
+
+          {/* Uploader Name */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500">Attribution</h3>
+            <div className="mt-2 space-y-2">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="anonymous"
+                  checked={isAnonymous}
+                  onChange={(e) => setIsAnonymous(e.target.checked)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label htmlFor="anonymous" className="ml-2 block text-sm text-gray-900">
+                  Stay anonymous
+                </label>
+              </div>
+
+              {!isAnonymous && (
+                <input
+                  type="text"
+                  value={uploaderName}
+                  onChange={(e) => setUploaderName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 p-4 rounded-lg">
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex space-x-4">
+          <button
+            onClick={() => navigate('/capture')}
+            className="flex-1 btn btn-secondary"
+            disabled={isUploading}
+          >
+            Retake
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="flex-1 btn btn-primary"
+            disabled={isUploading || (!isAnonymous && !uploaderName)}
+          >
+            {isUploading ? 'Uploading...' : 'Confirm & Generate URL'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ConfirmScreen; 
