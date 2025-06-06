@@ -5,6 +5,7 @@ import { formatTimestamp } from '../utils/timestamp';
 import { MediaMetadata, supabase } from '../utils/supabase';
 import Map from '../components/Map';
 import WatermarkedImage from '../components/WatermarkedImage';
+import { addWatermark } from '../utils/watermark';
 
 const VerifyScreen = () => {
   const { id } = useParams<{ id: string }>();
@@ -52,15 +53,29 @@ const VerifyScreen = () => {
     if (!metadata) return;
     
     try {
-      const response = await fetch(metadata.watermark_url);
+      // First get the original image
+      const response = await fetch(metadata.media_url);
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const imageUrl = URL.createObjectURL(blob);
+
+      // Add watermark
+      const watermarkedImageUrl = await addWatermark(imageUrl, {
+        text: 'Sourceable',
+        fontSize: 36,
+        color: 'rgba(255, 255, 255, 0.8)',
+        opacity: 0.8,
+        position: 'bottom-right'
+      });
+
+      // Create download link
       const a = document.createElement('a');
-      a.href = url;
+      a.href = watermarkedImageUrl;
       a.download = `sourceable-${metadata.public_url}.jpg`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      
+      // Cleanup
+      URL.revokeObjectURL(imageUrl);
       document.body.removeChild(a);
     } catch (err) {
       console.error('Download failed:', err);
@@ -221,7 +236,7 @@ const VerifyScreen = () => {
               title="Share on Telegram"
             >
               <svg className="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.306.048.42.024.12.048.24.072.36.096.24.024-.12.048-.24.072-.36.096-.24.12.024.24.048.36.072.24.024-.12.048-.24.072-.36.096z"/>
+                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.306.048.42.024.12.048.24.072.36.096.24.024-.12.048-.24.072-.36.096z"/>
               </svg>
               <span className="text-xs mt-1">Telegram</span>
             </button>
