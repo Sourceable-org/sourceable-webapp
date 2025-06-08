@@ -15,6 +15,8 @@ interface CaptureData {
     local: string;
     utc: string;
   };
+  facingMode: 'environment' | 'user';   // added
+  rotationAngle: number;                // added
 }
 
 export const CaptureScreen: React.FC = () => {
@@ -201,6 +203,8 @@ export const CaptureScreen: React.FC = () => {
       const location = await getCurrentLocation();
       const timestamps = getCurrentTimestamps();
 
+      const angle = screen.orientation?.angle ?? (window.orientation as number) ?? 0;
+
       const captureData: CaptureData = {
         media: URL.createObjectURL(imageBlob),
         mediaType: 'image',
@@ -209,7 +213,9 @@ export const CaptureScreen: React.FC = () => {
           longitude: location.longitude,
           accuracy: location.accuracy
         },
-        timestamps
+        timestamps,
+        facingMode,
+        rotationAngle: angle
       };
 
       sessionStorage.setItem('captureData', JSON.stringify(captureData));
@@ -250,6 +256,8 @@ export const CaptureScreen: React.FC = () => {
           const location = await getCurrentLocation();
           const timestamps = getCurrentTimestamps();
 
+          const angle = screen.orientation?.angle ?? (window.orientation as number) ?? 0;
+
           const captureData: CaptureData = {
             media: videoUrl,
             mediaType: 'video',
@@ -258,7 +266,9 @@ export const CaptureScreen: React.FC = () => {
               longitude: location.longitude,
               accuracy: location.accuracy
             },
-            timestamps
+            timestamps,
+            facingMode,
+            rotationAngle: angle
           };
 
           sessionStorage.setItem('captureData', JSON.stringify(captureData));
@@ -365,12 +375,25 @@ export const CaptureScreen: React.FC = () => {
         </div>
 
         <div className="flex justify-center items-center gap-4">
-          <button
-            onClick={handleBack}
-            className="p-3 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors"
-          >
-            Back
-          </button>
+        <button
+  onClick={handleBack}
+  className="p-3 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors"
+>
+  <svg
+    className="w-6 h-6"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M15 19l-7-7 7-7"
+    />
+  </svg>
+</button>
+
 
           {mode === 'photo' ? (
             <button

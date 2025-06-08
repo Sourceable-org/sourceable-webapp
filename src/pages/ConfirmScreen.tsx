@@ -16,6 +16,8 @@ interface CaptureData {
     local: string;
     utc: string;
   };
+  facingMode: 'environment' | 'user';   // add this
+  rotationAngle: number;                // add this
 }
 
 const ConfirmScreen = () => {
@@ -27,12 +29,6 @@ const ConfirmScreen = () => {
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    // Check environment variables
-    console.log('Environment check:', {
-      hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-      hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-    });
-
     const storedData = sessionStorage.getItem('captureData');
     if (!storedData) {
       navigate('/');
@@ -48,14 +44,6 @@ const ConfirmScreen = () => {
     setError('');
     
     try {
-      console.log('Starting upload process...');
-      console.log('Environment variables:', {
-        url: import.meta.env.VITE_SUPABASE_URL,
-        hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-        keyLength: import.meta.env.VITE_SUPABASE_ANON_KEY?.length
-      });
-      
-      // Convert media to File object
       const response = await fetch(captureData.media);
       const blob = await response.blob();
       const file = new File(
@@ -63,14 +51,7 @@ const ConfirmScreen = () => {
         `media.${captureData.mediaType === 'video' ? 'webm' : 'jpg'}`,
         { type: captureData.mediaType === 'video' ? 'video/webm' : 'image/jpeg' }
       );
-      console.log('File created:', {
-        size: file.size,
-        type: file.type,
-        name: file.name
-      });
 
-      // Upload to Supabase
-      console.log('Uploading to Supabase...');
       const result = await uploadMedia(file, {
         timestamp_local: captureData.timestamps.local,
         timestamp_utc: captureData.timestamps.utc,
@@ -79,17 +60,9 @@ const ConfirmScreen = () => {
         uploader_name: isAnonymous ? undefined : uploaderName,
       });
 
-      console.log('Upload successful:', result);
-
-      // Store the result in session storage for the post-publish screen
       sessionStorage.setItem('uploadResult', JSON.stringify(result));
       navigate('/published');
     } catch (error) {
-      console.error('Upload failed:', {
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        details: error
-      });
       setError(`Failed to upload media: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsUploading(false);
@@ -110,12 +83,24 @@ const ConfirmScreen = () => {
               src={captureData.media}
               controls
               className="w-full h-64 object-cover"
+              style={{
+                transform: `rotate(${-captureData.rotationAngle ?? 0}deg) ${
+                  captureData.facingMode === 'user' ? ' scaleX(-1)' : ''
+                }`,
+                transition: 'transform 0.3s ease'
+              }}
             />
           ) : (
             <img
               src={captureData.media}
               alt="Captured media"
               className="w-full h-64 object-cover"
+              style={{
+                transform: `rotate(${-captureData.rotationAngle ?? 0}deg) ${
+                  captureData.facingMode === 'user' ? ' scaleX(-1)' : ''
+                }`,
+                transition: 'transform 0.3s ease'
+              }}
             />
           )}
         </div>
@@ -202,4 +187,4 @@ const ConfirmScreen = () => {
   );
 };
 
-export default ConfirmScreen; 
+export default ConfirmScreen;
