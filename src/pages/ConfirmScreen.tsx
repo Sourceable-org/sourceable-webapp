@@ -5,7 +5,8 @@ import { formatTimestamp } from '../utils/timestamp';
 import { uploadMedia } from '../utils/supabase';
 
 interface CaptureData {
-  image: string;
+  media: string;
+  mediaType: 'image' | 'video';
   location: {
     latitude: number;
     longitude: number;
@@ -54,11 +55,14 @@ const ConfirmScreen = () => {
         keyLength: import.meta.env.VITE_SUPABASE_ANON_KEY?.length
       });
       
-      // Convert base64 to File object
-      console.log('Converting base64 to File...');
-      const response = await fetch(captureData.image);
+      // Convert media to File object
+      const response = await fetch(captureData.media);
       const blob = await response.blob();
-      const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+      const file = new File(
+        [blob],
+        `media.${captureData.mediaType === 'video' ? 'webm' : 'jpg'}`,
+        { type: captureData.mediaType === 'video' ? 'video/webm' : 'image/jpeg' }
+      );
       console.log('File created:', {
         size: file.size,
         type: file.type,
@@ -101,11 +105,19 @@ const ConfirmScreen = () => {
       <div className="max-w-md mx-auto space-y-6">
         {/* Preview */}
         <div className="bg-white rounded-lg overflow-hidden shadow-sm">
-          <img
-            src={captureData.image}
-            alt="Captured photo"
-            className="w-full h-64 object-cover"
-          />
+          {captureData.mediaType === 'video' ? (
+            <video
+              src={captureData.media}
+              controls
+              className="w-full h-64 object-cover"
+            />
+          ) : (
+            <img
+              src={captureData.media}
+              alt="Captured media"
+              className="w-full h-64 object-cover"
+            />
+          )}
         </div>
 
         {/* Metadata */}

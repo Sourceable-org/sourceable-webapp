@@ -25,29 +25,32 @@ export const uploadMedia = async (
   // Generate a unique slug for the public URL
   const slug = Math.random().toString(36).substring(2, 15);
   
+  // Determine file extension based on file type
+  const extension = file.type.startsWith('video/') ? 'mp4' : 'jpg';
+  
   // Upload original file
   const { data: originalData, error: originalError } = await supabase.storage
     .from('media')
-    .upload(`${slug}/original.jpg`, file);
+    .upload(`${slug}/original.${extension}`, file);
     
   if (originalError) throw originalError;
   
   // Get the public URL for the original file
   const { data: { publicUrl: mediaUrl } } = supabase.storage
     .from('media')
-    .getPublicUrl(`${slug}/original.jpg`);
+    .getPublicUrl(`${slug}/original.${extension}`);
     
   // Upload watermarked file (assuming it's already processed)
   const { data: watermarkData, error: watermarkError } = await supabase.storage
     .from('media')
-    .upload(`${slug}/watermarked.jpg`, file);
+    .upload(`${slug}/watermarked.${extension}`, file);
     
   if (watermarkError) throw watermarkError;
   
   // Get the public URL for the watermarked file
   const { data: { publicUrl: watermarkUrl } } = supabase.storage
     .from('media')
-    .getPublicUrl(`${slug}/watermarked.jpg`);
+    .getPublicUrl(`${slug}/watermarked.${extension}`);
     
   // Create the metadata record
   const { data, error } = await supabase
