@@ -35,7 +35,6 @@ export const CaptureScreen: React.FC = () => {
       if (cameraBusy) return;
       setCameraBusy(true);
 
-      // Stop existing stream first
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
@@ -86,7 +85,6 @@ export const CaptureScreen: React.FC = () => {
     setFacingMode(prev => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  // Initialize camera on mount
   useEffect(() => {
     let permissionStatus: PermissionStatus | null = null;
 
@@ -100,7 +98,6 @@ export const CaptureScreen: React.FC = () => {
           return;
         }
 
-        // Permissions API
         permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
 
         const handlePermissionChange = () => {
@@ -120,7 +117,6 @@ export const CaptureScreen: React.FC = () => {
           setError('Camera access is blocked. Please enable camera access in your browser settings.');
         }
       } catch (err) {
-        // Fallback: try to access camera directly
         startCamera();
       }
     };
@@ -135,7 +131,6 @@ export const CaptureScreen: React.FC = () => {
     };
   }, []);
 
-  // Restart camera when mode or facingMode changes
   useEffect(() => {
     const switchCamera = async () => {
       await stopCamera();
@@ -144,6 +139,39 @@ export const CaptureScreen: React.FC = () => {
 
     switchCamera();
   }, [mode, facingMode]);
+
+  // Rotate video based on device orientation
+  useEffect(() => {
+    const handleOrientationChange = () => {
+      let angle = 0;
+
+      if (screen.orientation && screen.orientation.angle !== undefined) {
+        angle = screen.orientation.angle;
+      } else if (window.orientation !== undefined) {
+        angle = (window.orientation as number) || 0;
+      }
+
+      if (videoRef.current) {
+        videoRef.current.style.transform = `rotate(${-angle}deg) ${
+          facingMode === 'user' ? ' scaleX(-1)' : ''
+        }`;
+      }
+    };
+
+    window.addEventListener('orientationchange', handleOrientationChange);
+    if (screen.orientation) {
+      screen.orientation.addEventListener('change', handleOrientationChange);
+    }
+
+    handleOrientationChange();
+
+    return () => {
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      if (screen.orientation) {
+        screen.orientation.removeEventListener('change', handleOrientationChange);
+      }
+    };
+  }, [facingMode]);
 
   const handleCapture = async () => {
     if (!videoRef.current || !streamRef.current) {
@@ -269,30 +297,13 @@ export const CaptureScreen: React.FC = () => {
           ref={videoRef}
           autoPlay
           playsInline
-          muted // Always muted for autoplay compatibility
-          className="absolute inset-0 w-full h-full object-cover"
+          muted
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 ease-in-out"
         />
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-90">
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-90 z-20">
             <div className="bg-white rounded-2xl shadow-xl max-w-sm mx-4 overflow-hidden">
               <div className="p-6">
-                <div className="flex items-center justify-center mb-4">
-                  <div className="bg-red-100 p-3 rounded-full">
-                    <svg
-                      className="w-8 h-8 text-red-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                      />
-                    </svg>
-                  </div>
-                </div>
                 <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
                   Camera Access Required
                 </h3>
@@ -305,15 +316,10 @@ export const CaptureScreen: React.FC = () => {
                         const permissions = await navigator.permissions.query({
                           name: 'camera' as PermissionName
                         });
-                        if (
-                          permissions.state === 'granted' ||
-                          permissions.state === 'prompt'
-                        ) {
+                        if (permissions.state === 'granted' || permissions.state === 'prompt') {
                           await startCamera();
                         } else {
-                          setError(
-                            'Camera access is still blocked. Please enable camera access in your browser settings.'
-                          );
+                          setError('Camera access is still blocked. Please enable camera access in your browser settings.');
                         }
                       } catch {
                         await startCamera();
@@ -336,15 +342,13 @@ export const CaptureScreen: React.FC = () => {
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-black bg-opacity-75 p-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-black bg-opacity-75 p-4 z-10">
         <div className="flex justify-center mb-4">
           <div className="bg-gray-800 rounded-lg p-1">
             <button
               onClick={() => setMode('photo')}
               className={`px-4 py-2 rounded-lg transition-colors ${
-                mode === 'photo'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-300 hover:text-white'
+                mode === 'photo' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
               }`}
             >
               Photo
@@ -352,9 +356,7 @@ export const CaptureScreen: React.FC = () => {
             <button
               onClick={() => setMode('video')}
               className={`px-4 py-2 rounded-lg transition-colors ${
-                mode === 'video'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-300 hover:text-white'
+                mode === 'video' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
               }`}
             >
               Video
@@ -367,19 +369,7 @@ export const CaptureScreen: React.FC = () => {
             onClick={handleBack}
             className="p-3 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
+            Back
           </button>
 
           {mode === 'photo' ? (
@@ -393,9 +383,7 @@ export const CaptureScreen: React.FC = () => {
             <button
               onClick={isRecording ? handleVideoStop : handleVideoStart}
               className={`p-4 rounded-full transition-colors ${
-                isRecording
-                  ? 'bg-red-600 hover:bg-red-700'
-                  : 'bg-white hover:bg-gray-100'
+                isRecording ? 'bg-red-600 hover:bg-red-700' : 'bg-white hover:bg-gray-100'
               }`}
             >
               <div
