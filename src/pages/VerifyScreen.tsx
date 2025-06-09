@@ -69,6 +69,8 @@ const VerifyScreen = () => {
         gpsPrecision: metadata.gps_precision,
         gpsRadiusMiles: metadata.gps_radius_miles,
         timestamp: formatTimestamp(metadata.timestamp_local),
+        gpsLat: metadata.gps_lat,
+        gpsLng: metadata.gps_lng
       };
 
       const mediaType = getMediaType(metadata.media_url);
@@ -91,10 +93,13 @@ const VerifyScreen = () => {
   };
 
   const renderLocationLabel = () => {
-    if (metadata?.gps_precision === 'exact') {
+    if (!metadata) return '';
+    
+    if (metadata.gps_precision === 'exact') {
       return formatCoordinates(metadata.gps_lat, metadata.gps_lng, 'exact');
     } else {
-      return `Within ${metadata?.gps_radius_miles} mile radius`;
+      const radius = metadata.gps_radius_miles || 5; // Default to 5 miles if not specified
+      return `${formatApproxCoordinates(metadata.gps_lat, metadata.gps_lng)} (within ${radius} mile radius)`;
     }
   };
 
