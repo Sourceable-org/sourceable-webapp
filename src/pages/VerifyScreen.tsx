@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { formatCoordinates } from '../utils/gps';
+import { formatCoordinates, formatApproxCoordinates } from '../utils/gps';
 import { formatTimestamp } from '../utils/timestamp';
 import { MediaMetadata, supabase } from '../utils/supabase';
 import Map from '../components/Map';
@@ -114,8 +114,15 @@ const VerifyScreen = () => {
     if (metadata.gps_precision === 'exact') {
       return formatCoordinates(metadata.gps_lat, metadata.gps_lng, 'exact');
     } else {
-      return `Location: within ${metadata.gps_radius_miles} mile radius`;
+      return `Within ${metadata.gps_radius_miles} mile radius`;
     }
+  };
+
+  const renderApproxCoordinates = () => {
+    if (metadata.gps_lat !== undefined && metadata.gps_lng !== undefined) {
+      return formatApproxCoordinates(metadata.gps_lat, metadata.gps_lng);
+    }
+    return '';
   };
 
   return (
@@ -145,6 +152,9 @@ const VerifyScreen = () => {
             <h3 className="text-sm font-medium text-gray-500">Location</h3>
             <p className="mt-1 text-gray-900">
               {renderLocationLabel()}
+            </p>
+            <p className="mt-1 text-gray-500 text-sm italic">
+              Approx. coordinates: {renderApproxCoordinates()}
             </p>
           </div>
 

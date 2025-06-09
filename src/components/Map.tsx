@@ -32,7 +32,7 @@ const Map = ({ center, zoom, radiusMiles }: MapProps) => {
       }).addTo(map);
       circle.bindPopup(`
         <strong>Approximate location</strong><br/>
-        Center: ${center[0].toFixed(4)}, ${center[1].toFixed(4)}<br/>
+        Center: ${center[0].toFixed(2)}, ${center[1].toFixed(2)}<br/>
         Radius: ${radiusMiles} miles
       `).openPopup();
     } else {
