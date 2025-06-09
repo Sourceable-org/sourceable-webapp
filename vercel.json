@@ -1,5 +1,4 @@
 {
-  "privacy": "public",
   "rewrites": [
     {
       "source": "/(.*)",
