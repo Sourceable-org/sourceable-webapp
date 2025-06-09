@@ -6,38 +6,46 @@ interface WatermarkedImageProps {
   className?: string;
   timestamp: string;
   location: string;
+  verificationUrl?: string;
 }
 
-const WatermarkedImage = ({ src, alt, className, timestamp, location }: WatermarkedImageProps) => {
+const WatermarkedImage = ({ src, alt, className, timestamp, location, verificationUrl }: WatermarkedImageProps) => {
   const [isLoading, setIsLoading] = useState(true);
 
   return (
     <div className="relative">
+      {/* Main image */}
       <img
         src={src}
         alt={alt}
         className={`${className} ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
         onLoad={() => setIsLoading(false)}
       />
+      
       {!isLoading && (
         <>
           {/* Semi-transparent overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
           
-          {/* Watermark text */}
-          <div className="absolute bottom-0 left-0 right-0 p-6">
-            <div className="text-white space-y-2">
+          {/* Black box with logo and URL */}
+          <div className="absolute bottom-0 left-0 right-0 bg-black p-4">
+            <div className="flex flex-col space-y-2">
               <div className="flex items-center space-x-2">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <span className="text-xl font-bold">Sourceable</span>
+                <img src="/images/image.png" alt="Sourceable Logo" className="h-6 w-auto" />
+                <span className="text-white text-lg font-bold">Sourceable</span>
               </div>
-              <div className="text-sm space-y-1">
-                <p className="text-white/90">{location}</p>
-                <p className="text-white/90">{timestamp}</p>
+              <div className="text-white/80 text-sm">
+                <p>{timestamp}</p>
+                {verificationUrl && (
+                  <a 
+                    href={verificationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-white/80 hover:text-white text-sm break-all"
+                  >
+                    {verificationUrl}
+                  </a>
+                )}
               </div>
             </div>
           </div>
@@ -48,6 +56,12 @@ const WatermarkedImage = ({ src, alt, className, timestamp, location }: Watermar
           </div>
         </>
       )}
+      
+      {/* GPS coordinates outside image frame */}
+      <div className="mt-2 text-sm text-gray-600">
+        <p>{location}</p>
+      </div>
+
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>

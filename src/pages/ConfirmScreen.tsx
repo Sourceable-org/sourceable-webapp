@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatCoordinates } from '../utils/gps';
+import { formatCoordinates, GpsPrecision } from '../utils/gps';
 import { formatTimestamp } from '../utils/timestamp';
 import { uploadMedia } from '../utils/supabase';
 
@@ -16,8 +16,8 @@ interface CaptureData {
     local: string;
     utc: string;
   };
-  facingMode: 'environment' | 'user';   // add this
-  rotationAngle: number;                // add this
+  facingMode: 'environment' | 'user';
+  rotationAngle: number;
 }
 
 const ConfirmScreen = () => {
@@ -27,6 +27,8 @@ const ConfirmScreen = () => {
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [gpsPrecision, setGpsPrecision] = useState<GpsPrecision>('exact');
+  const [gpsRadius, setGpsRadius] = useState<number>(5);
 
   useEffect(() => {
     const storedData = sessionStorage.getItem('captureData');
@@ -37,12 +39,19 @@ const ConfirmScreen = () => {
     setCaptureData(JSON.parse(storedData));
   }, [navigate]);
 
+  useEffect(() => {
+    if (gpsPrecision === '5mile') setGpsRadius(5);
+    else if (gpsPrecision === '10mile') setGpsRadius(10);
+    else if (gpsPrecision === '20mile') setGpsRadius(20);
+    else setGpsRadius(0);
+  }, [gpsPrecision]);
+
   const handleConfirm = async () => {
     if (!captureData) return;
 
     setIsUploading(true);
     setError('');
-    
+
     try {
       const response = await fetch(captureData.media);
       const blob = await response.blob();
@@ -58,6 +67,8 @@ const ConfirmScreen = () => {
         gps_lat: captureData.location.latitude,
         gps_lng: captureData.location.longitude,
         uploader_name: isAnonymous ? undefined : uploaderName,
+        gps_precision: gpsPrecision,
+        gps_radius_miles: gpsRadius,
       });
 
       sessionStorage.setItem('uploadResult', JSON.stringify(result));
@@ -84,7 +95,7 @@ const ConfirmScreen = () => {
               controls
               className="w-full h-64 object-cover"
               style={{
-                transform: `rotate(${-captureData.rotationAngle ?? 0}deg) ${
+                transform: `rotate(${-captureData.rotationAngle || 0}deg) ${
                   captureData.facingMode === 'user' ? ' scaleX(-1)' : ''
                 }`,
                 transition: 'transform 0.3s ease'
@@ -96,7 +107,7 @@ const ConfirmScreen = () => {
               alt="Captured media"
               className="w-full h-64 object-cover"
               style={{
-                transform: `rotate(${-captureData.rotationAngle ?? 0}deg) ${
+                transform: `rotate(${-captureData.rotationAngle || 0}deg) ${
                   captureData.facingMode === 'user' ? ' scaleX(-1)' : ''
                 }`,
                 transition: 'transform 0.3s ease'
@@ -110,8 +121,21 @@ const ConfirmScreen = () => {
           <div>
             <h3 className="text-sm font-medium text-gray-500">Location</h3>
             <p className="mt-1 text-gray-900">
-              {formatCoordinates(captureData.location.latitude, captureData.location.longitude)}
+              {formatCoordinates(captureData.location.latitude, captureData.location.longitude, gpsPrecision)}
             </p>
+            <div className="mt-2">
+              <label className="text-sm text-gray-500">Location Precision</label>
+              <select
+                value={gpsPrecision}
+                onChange={(e) => setGpsPrecision(e.target.value as GpsPrecision)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              >
+                <option value="exact">Exact Location</option>
+                <option value="5mile">5-mile Radius</option>
+                <option value="10mile">10-mile Radius</option>
+                <option value="20mile">20-mile Radius</option>
+              </select>
+            </div>
           </div>
 
           <div>
@@ -172,14 +196,14 @@ const ConfirmScreen = () => {
             className="flex-1 btn btn-secondary"
             disabled={isUploading}
           >
-            Retake
+            Cancel
           </button>
           <button
             onClick={handleConfirm}
             className="flex-1 btn btn-primary"
             disabled={isUploading || (!isAnonymous && !uploaderName)}
           >
-            {isUploading ? 'Uploading...' : 'Confirm & Generate URL'}
+            {isUploading ? 'Uploading...' : 'Confirm & Upload'}
           </button>
         </div>
       </div>
