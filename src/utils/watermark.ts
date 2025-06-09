@@ -1,13 +1,9 @@
-import { formatCoordinates, formatApproxCoordinates } from './gps';
-
 interface WatermarkOptions {
   logoUrl: string;
   verificationUrl: string;
-  gpsPrecision?: 'exact' | '5mi' | '10mi' | '20mi';
+  gpsPrecision?: 'exact' | '5mile' | '10mile' | '20mile';
   gpsRadiusMiles?: number;
   timestamp: string;
-  gpsLat: number;
-  gpsLng: number;
 }
 
 export const addWatermark = async (
@@ -55,8 +51,8 @@ export const addWatermark = async (
           options.verificationUrl,
           options.timestamp,
           options.gpsPrecision === 'exact'
-            ? `Location: ${formatCoordinates(options.gpsLat, options.gpsLng, 'exact')}`
-            : `Location: ${formatApproxCoordinates(options.gpsLat, options.gpsLng)} (within ${options.gpsRadiusMiles} mile radius)`
+            ? 'Location: Exact location'
+            : `Location: Approx. (${options.gpsRadiusMiles} mile radius)`
         ];
         
         // Draw text
@@ -184,8 +180,8 @@ export const addVideoWatermark = async (
             options.verificationUrl,
             options.timestamp,
             options.gpsPrecision === 'exact'
-              ? `Location: ${formatCoordinates(options.gpsLat, options.gpsLng, 'exact')}`
-              : `Location: ${formatApproxCoordinates(options.gpsLat, options.gpsLng)} (within ${options.gpsRadiusMiles} mile radius)`
+              ? 'Location: Exact location'
+              : `Location: Approx. (${options.gpsRadiusMiles} mile radius)`
           ];
           
           // Draw text
