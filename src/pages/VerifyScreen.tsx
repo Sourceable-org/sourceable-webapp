@@ -5,13 +5,19 @@ import { formatTimestamp } from '../utils/timestamp';
 import { MediaMetadata, supabase } from '../utils/supabase';
 import Map from '../components/Map';
 import WatermarkedImage from '../components/WatermarkedImage';
-import { addWatermark } from '../utils/watermark';
+import { addWatermark, addVideoWatermark } from '../utils/watermark';
 
 const VerifyScreen = () => {
   const { id } = useParams<{ id: string }>();
   const [metadata, setMetadata] = useState<MediaMetadata | null>(null);
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Helper function to determine media type from URL
+  const getMediaType = (url: string): 'image' | 'video' => {
+    const extension = url.split('.').pop()?.toLowerCase();
+    return extension === 'mp4' ? 'video' : 'image';
+  };
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -53,29 +59,37 @@ const VerifyScreen = () => {
     if (!metadata) return;
     
     try {
-      // First get the original image
+      // First get the original media
       const response = await fetch(metadata.media_url);
       const blob = await response.blob();
-      const imageUrl = URL.createObjectURL(blob);
+      const mediaUrl = URL.createObjectURL(blob);
 
-      // Add watermark
-      const watermarkedImageUrl = await addWatermark(imageUrl, {
+      let watermarkedUrl: string;
+      const watermarkOptions = {
         text: 'Sourceable',
         fontSize: 36,
         color: 'rgba(255, 255, 255, 0.8)',
         opacity: 0.8,
-        position: 'bottom-right'
-      });
+        position: 'bottom-right' as const
+      };
+
+      // Add watermark based on media type
+      const mediaType = getMediaType(metadata.media_url);
+      if (mediaType === 'video') {
+        watermarkedUrl = await addVideoWatermark(mediaUrl, watermarkOptions);
+      } else {
+        watermarkedUrl = await addWatermark(mediaUrl, watermarkOptions);
+      }
 
       // Create download link
       const a = document.createElement('a');
-      a.href = watermarkedImageUrl;
-      a.download = `sourceable-${metadata.public_url}.jpg`;
+      a.href = watermarkedUrl;
+      a.download = `sourceable-${metadata.public_url}.${mediaType === 'video' ? 'webm' : 'jpg'}`;
       document.body.appendChild(a);
       a.click();
       
       // Cleanup
-      URL.revokeObjectURL(imageUrl);
+      URL.revokeObjectURL(mediaUrl);
       document.body.removeChild(a);
     } catch (err) {
       console.error('Download failed:', err);
@@ -108,13 +122,21 @@ const VerifyScreen = () => {
       <div className="max-w-md mx-auto space-y-6">
         {/* Media */}
         <div className="bg-white rounded-lg overflow-hidden shadow-sm">
-          <WatermarkedImage
-            src={metadata.media_url}
-            alt="Verified media"
-            className="w-full h-64 object-cover"
-            timestamp={formatTimestamp(metadata.timestamp_local)}
-            location={formatCoordinates(metadata.gps_lat, metadata.gps_lng)}
-          />
+          {metadata && getMediaType(metadata.media_url) === 'video' ? (
+            <video
+              src={metadata.media_url}
+              controls
+              className="w-full h-64 object-cover"
+            />
+          ) : (
+            <WatermarkedImage
+              src={metadata?.media_url || ''}
+              alt="Verified media"
+              className="w-full h-64 object-cover"
+              timestamp={formatTimestamp(metadata?.timestamp_local || '')}
+              location={formatCoordinates(metadata?.gps_lat || 0, metadata?.gps_lng || 0)}
+            />
+          )}
         </div>
 
         {/* Metadata */}
