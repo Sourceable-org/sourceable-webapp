@@ -69,6 +69,8 @@ const VerifyScreen = () => {
         gpsPrecision: metadata.gps_precision,
         gpsRadiusMiles: metadata.gps_radius_miles,
         timestamp: formatTimestamp(metadata.timestamp_local),
+        gpsLat: metadata.gps_lat,
+        gpsLng: metadata.gps_lng,
       };
 
       const mediaType = getMediaType(metadata.media_url);

@@ -3,6 +3,8 @@ interface WatermarkOptions {
   verificationUrl: string;
   gpsPrecision?: 'exact' | '5mile' | '10mile' | '20mile';
   gpsRadiusMiles?: number;
+  gpsLat?: number;  // Added
+  gpsLng?: number;  // Added
   timestamp: string;
 }
 
@@ -23,39 +25,30 @@ export const addWatermark = async (
         return;
       }
       
-      // Set canvas dimensions to match image plus footer
       const footerHeight = 80;
       canvas.width = img.width;
       canvas.height = img.height + footerHeight;
       
-      // Draw original image
       ctx.drawImage(img, 0, 0);
       
-      // Draw footer background
       ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
       ctx.fillRect(0, img.height, canvas.width, footerHeight);
       
-      // Load logo
       const logo = new Image();
       logo.crossOrigin = 'anonymous';
       logo.onload = () => {
-        // Draw logo
         const logoHeight = 60;
         const logoWidth = logoHeight * 2;
         const logoX = 20;
         const logoY = img.height + (footerHeight - logoHeight) / 2;
         ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
         
-        // Prepare text lines
         const lines = [
           options.verificationUrl,
           options.timestamp,
-          options.gpsPrecision === 'exact'
-            ? 'Location: Exact location'
-            : `Location: Approx. (${options.gpsRadiusMiles} mile radius)`
+          `Approx. Coordinates: ${options.gpsLat?.toFixed(5)}, ${options.gpsLng?.toFixed(5)}`
         ];
         
-        // Draw text
         const fontSize = 14;
         const lineHeight = fontSize * 1.4;
         ctx.font = `${fontSize}px Arial`;
@@ -68,7 +61,6 @@ export const addWatermark = async (
           textY += lineHeight;
         });
         
-        // Convert to data URL
         resolve(canvas.toDataURL('image/jpeg', 0.95));
       };
       
@@ -86,6 +78,7 @@ export const addWatermark = async (
     img.src = imageUrl;
   });
 };
+
 
 export const addVideoWatermark = async (
   videoUrl: string,
@@ -105,7 +98,6 @@ export const addVideoWatermark = async (
         return;
       }
       
-      // Calculate scaled dimensions
       const maxWidth = 1280;
       const maxHeight = 720;
       let width = video.videoWidth;
@@ -121,10 +113,8 @@ export const addVideoWatermark = async (
       canvas.width = width;
       canvas.height = height + footerHeight;
       
-      // Capture stream
       const stream = canvas.captureStream();
       
-      // Audio setup
       const audioContext = new AudioContext();
       const audioDestination = audioContext.createMediaStreamDestination();
       const audioSource = audioContext.createMediaElementSource(video);
@@ -151,7 +141,6 @@ export const addVideoWatermark = async (
       
       mediaRecorder.start();
       
-      // Load logo
       const logo = new Image();
       logo.crossOrigin = 'anonymous';
       logo.onload = () => {
@@ -161,30 +150,23 @@ export const addVideoWatermark = async (
             return;
           }
           
-          // Draw video frame
           ctx.drawImage(video, 0, 0, width, height);
           
-          // Draw footer background
           ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
           ctx.fillRect(0, height, width, footerHeight);
           
-          // Draw logo
           const logoHeight = 60;
           const logoWidth = logoHeight * 2;
           const logoX = 20;
           const logoY = height + (footerHeight - logoHeight) / 2;
           ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
           
-          // Prepare text lines
           const lines = [
             options.verificationUrl,
             options.timestamp,
-            options.gpsPrecision === 'exact'
-              ? 'Location: Exact location'
-              : `Location: Approx. (${options.gpsRadiusMiles} mile radius)`
+            `Approx. Coordinates: ${options.gpsLat?.toFixed(5)}, ${options.gpsLng?.toFixed(5)}`
           ];
           
-          // Draw text
           const fontSize = 14;
           const lineHeight = fontSize * 1.4;
           ctx.font = `${fontSize}px Arial`;
@@ -216,3 +198,4 @@ export const addVideoWatermark = async (
     };
   });
 };
+
