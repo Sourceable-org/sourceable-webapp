@@ -16,6 +16,7 @@ export interface MediaMetadata {
   public_url: string;
   watermark_url: string;
   uploader_name?: string;
+  gps_precision?: 'exact' | '5mi' | '10mi' | '20mi';
 }
 
 export const uploadMedia = async (
