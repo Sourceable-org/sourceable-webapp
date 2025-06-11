@@ -4,7 +4,6 @@ import { formatCoordinates, formatApproxCoordinates } from '../utils/gps';
 import { formatTimestamp } from '../utils/timestamp';
 import { MediaMetadata, supabase } from '../utils/supabase';
 import Map from '../components/Map';
-import WatermarkedImage from '../components/WatermarkedImage';
 import { addWatermark, addVideoWatermark } from '../utils/watermark';
 
 const VerifyScreen = () => {
@@ -12,6 +11,8 @@ const VerifyScreen = () => {
   const [metadata, setMetadata] = useState<MediaMetadata | null>(null);
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [isProcessingWatermark, setIsProcessingWatermark] = useState(false);
   const verificationUrl = `${window.location.origin}/verify/${id}`;
 
   const getMediaType = (url: string): 'image' | 'video' => {
@@ -49,6 +50,43 @@ const VerifyScreen = () => {
       setIsLoading(false);
     }
   }, [id]);
+
+  useEffect(() => {
+    const createWatermarkedPreview = async () => {
+      if (!metadata) return;
+
+      try {
+        setIsProcessingWatermark(true);
+        const watermarkOptions = {
+          logoUrl: '/images/image.png',
+          verificationUrl: verificationUrl,
+          gpsPrecision: metadata.gps_precision,
+          gpsRadiusMiles: metadata.gps_radius_miles,
+          timestamp: formatTimestamp(metadata.timestamp_local),
+          gpsLat: metadata.gps_lat,
+          gpsLng: metadata.gps_lng,
+        };
+
+        const mediaType = getMediaType(metadata.media_url);
+        if (mediaType === 'video') {
+          // For videos, just use the original URL
+          setPreviewUrl(metadata.media_url);
+        } else {
+          const watermarkedUrl = await addWatermark(metadata.media_url, watermarkOptions);
+          setPreviewUrl(watermarkedUrl);
+        }
+      } catch (err) {
+        console.error('Failed to create watermarked preview:', err);
+        setError('Failed to create preview');
+      } finally {
+        setIsProcessingWatermark(false);
+      }
+    };
+
+    if (metadata) {
+      createWatermarkedPreview();
+    }
+  }, [metadata, verificationUrl]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -130,7 +168,7 @@ const VerifyScreen = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-md mx-auto space-y-6">
-        <div className="bg-white rounded-lg overflow-hidden shadow-sm">
+        <div className="bg-white rounded-lg overflow-hidden shadow-sm relative">
           {metadata && getMediaType(metadata.media_url) === 'video' ? (
             <video
               src={metadata.media_url}
@@ -138,14 +176,18 @@ const VerifyScreen = () => {
               className="w-full h-64 object-cover"
             />
           ) : (
-            <WatermarkedImage
-              src={metadata?.media_url || ''}
-              alt="Verified media"
-              className="w-full h-64 object-cover"
-              timestamp={formatTimestamp(metadata?.timestamp_local || '')}
-              location={renderLocationLabel()}
-              verificationUrl={verificationUrl}
-            />
+            <>
+              <img
+    src={previewUrl || metadata.media_url}
+    alt="Verified media"
+    className="max-w-full max-h-[80vh] object-contain"
+  />
+              {isProcessingWatermark && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                  <div className="text-white text-sm">Processing watermark...</div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
