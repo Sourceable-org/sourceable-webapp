@@ -3,6 +3,8 @@ import LaunchScreen from './pages/LaunchScreen';
 import CaptureScreen from './pages/CaptureScreen';
 import ConfirmScreen from './pages/ConfirmScreen';
 import VerifyScreen from './pages/VerifyScreen';
+import DashboardScreen from './pages/DashboardScreen';
+import AnalyticsScreen from './pages/AnalyticsScreen';
 
 function App() {
   return (
@@ -13,6 +15,8 @@ function App() {
           <Route path="/capture" element={<CaptureScreen />} />
           <Route path="/confirm" element={<ConfirmScreen />} />
           <Route path="/verify/:id" element={<VerifyScreen />} />
+          <Route path="/dashboard" element={<DashboardScreen />} />
+          <Route path="/analytics" element={<AnalyticsScreen />} />
         </Routes>
       </div>
     </Router>
