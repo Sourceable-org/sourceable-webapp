@@ -1,201 +1,183 @@
+import { reverseGeocode } from './gps';
+
 interface WatermarkOptions {
   logoUrl: string;
   verificationUrl: string;
   gpsPrecision?: 'exact' | '5mile' | '10mile' | '20mile';
   gpsRadiusMiles?: number;
-  gpsLat?: number;  // Added
-  gpsLng?: number;  // Added
+  gpsLat?: number;
+  gpsLng?: number;
   timestamp: string;
 }
+
+const drawWatermark = async (
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  logo: HTMLImageElement,
+  options: WatermarkOptions,
+  locationText: string
+) => {
+  // --- Styling ---
+  const startX = canvas.width * 0.04;
+  const pad = canvas.width * 0.02;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'white';
+  ctx.globalAlpha = 0.6;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
+
+  let currentY = canvas.height - pad * 1.5;
+
+  // --- Draw Elements from Bottom to Top ---
+
+  // 1. Timestamp
+  const timestampFont = `bold ${canvas.width * 0.022}px Arial`;
+  ctx.font = timestampFont;
+  ctx.fillText(options.timestamp, startX, currentY);
+  currentY -= (canvas.width * 0.03);
+
+  // 2. Location
+  if (locationText) {
+    const locationFont = `bold ${canvas.width * 0.03}px Arial`;
+    ctx.font = locationFont;
+    ctx.fillText(locationText, startX, currentY);
+    currentY -= (canvas.width * 0.04);
+  }
+
+  // 3. Logo and Brand Name
+  const logoHeight = canvas.width * 0.06;
+  const brandFont = `bold ${logoHeight * 0.95}px Arial`;
+  ctx.font = brandFont;
+  
+  // Vertically align logo and text
+  const brandY = currentY - logoHeight / 2;
+  ctx.drawImage(logo, startX, brandY - logoHeight / 2, logoHeight, logoHeight);
+  ctx.textBaseline = 'middle';
+  const textX = startX + logoHeight + (canvas.width * 0.015);
+  ctx.fillText('SOURCEABLE', textX, brandY);
+  currentY -= (logoHeight + pad);
+  
+  // 4. Verification URL
+  ctx.textBaseline = 'alphabetic'; // Reset baseline
+  const urlFont = `${canvas.width * 0.02}px Arial`;
+  ctx.font = urlFont;
+  const displayUrl = options.verificationUrl.replace(/^(https?:\/\/)/, '');
+  ctx.fillText(displayUrl, startX, currentY);
+};
 
 export const addWatermark = async (
   imageUrl: string,
   options: WatermarkOptions
 ): Promise<string> => {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    
-    img.onload = () => {
+    img.src = imageUrl;
+
+    img.onload = async () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      
-      if (!ctx) {
-        reject(new Error('Could not get canvas context'));
-        return;
-      }
-      
-      const footerHeight = 80;
+      if (!ctx) return reject(new Error('Could not get canvas context'));
+
       canvas.width = img.width;
-      canvas.height = img.height + footerHeight;
-      
+      canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
-      
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-      ctx.fillRect(0, img.height, canvas.width, footerHeight);
-      
+
+      let locationText = '';
+      if (options.gpsLat != null && options.gpsLng != null) {
+        try {
+          locationText = await reverseGeocode(options.gpsLat, options.gpsLng);
+        } catch {
+          locationText = `${options.gpsLat.toFixed(4)}°, ${options.gpsLng.toFixed(4)}°`;
+        }
+      }
+
       const logo = new Image();
       logo.crossOrigin = 'anonymous';
+      logo.src = options.logoUrl;
+
       logo.onload = () => {
-        const logoHeight = 60;
-        const logoWidth = logoHeight * 2;
-        const logoX = 20;
-        const logoY = img.height + (footerHeight - logoHeight) / 2;
-        ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
-        
-        const lines = [
-          options.verificationUrl,
-          options.timestamp,
-          `Approx. Coordinates: ${options.gpsLat?.toFixed(5)}, ${options.gpsLng?.toFixed(5)}`
-        ];
-        
-        const fontSize = 14;
-        const lineHeight = fontSize * 1.4;
-        ctx.font = `${fontSize}px Arial`;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        const textX = logoX + logoWidth + 20;
-        let textY = img.height + 30;
-        
-        lines.forEach(line => {
-          ctx.fillText(line, textX, textY);
-          textY += lineHeight;
-        });
-        
+        drawWatermark(ctx, canvas, logo, options, locationText);
         resolve(canvas.toDataURL('image/jpeg', 0.95));
       };
-      
-      logo.onerror = () => {
-        reject(new Error('Failed to load logo'));
-      };
-      
-      logo.src = options.logoUrl;
+      logo.onerror = () => reject(new Error('Failed to load logo'));
     };
-    
-    img.onerror = () => {
-      reject(new Error('Failed to load image'));
-    };
-    
-    img.src = imageUrl;
+    img.onerror = () => reject(new Error('Failed to load image'));
   });
 };
-
 
 export const addVideoWatermark = async (
   videoUrl: string,
   options: WatermarkOptions
 ): Promise<string> => {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.src = videoUrl;
-    
-    video.onloadedmetadata = () => {
+    video.muted = true;
+
+    video.oncanplay = async () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      
-      if (!ctx) {
-        reject(new Error('Could not get canvas context'));
-        return;
+      if (!ctx) return reject(new Error('Canvas context not found'));
+
+      // size canvas
+      const vw = video.videoWidth, vh = video.videoHeight;
+      let cw = 800, ch = cw * (vh / vw);
+      if (ch > 600) {
+        ch = 600;
+        cw = ch * (vw / vh);
       }
-      
-      const maxWidth = 1280;
-      const maxHeight = 720;
-      let width = video.videoWidth;
-      let height = video.videoHeight;
-      
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height);
-        width = Math.floor(width * ratio);
-        height = Math.floor(height * ratio);
-      }
-      
-      const footerHeight = 80;
-      canvas.width = width;
-      canvas.height = height + footerHeight;
-      
+      canvas.width = cw;
+      canvas.height = ch;
+
       const stream = canvas.captureStream();
-      
-      const audioContext = new AudioContext();
-      const audioDestination = audioContext.createMediaStreamDestination();
-      const audioSource = audioContext.createMediaElementSource(video);
-      audioSource.connect(audioDestination);
-      
-      const combinedStream = new MediaStream([
+      const audioCtx = new AudioContext();
+      const dest = audioCtx.createMediaStreamDestination();
+      const src = audioCtx.createMediaElementSource(video);
+      src.connect(dest);
+      const combined = new MediaStream([
         ...stream.getVideoTracks(),
-        ...audioDestination.stream.getAudioTracks()
+        ...dest.stream.getAudioTracks()
       ]);
-      
-      const mediaRecorder = new MediaRecorder(combinedStream, {
-        mimeType: 'video/webm;codecs=vp8,opus',
-        videoBitsPerSecond: 1000000,
-        audioBitsPerSecond: 128000
-      });
-      
+
+      const recorder = new MediaRecorder(combined, { mimeType: 'video/webm' });
       const chunks: Blob[] = [];
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        resolve(url);
-      };
-      
-      mediaRecorder.start();
-      
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = () => resolve(URL.createObjectURL(new Blob(chunks, { type: 'video/webm' })));
+      recorder.start();
+
+      let locationText = '';
+      if (options.gpsLat != null && options.gpsLng != null) {
+        try {
+          locationText = await reverseGeocode(options.gpsLat, options.gpsLng);
+        } catch {
+          locationText = `${options.gpsLat.toFixed(4)}°, ${options.gpsLng.toFixed(4)}°`;
+        }
+      }
+
       const logo = new Image();
       logo.crossOrigin = 'anonymous';
+      logo.src = options.logoUrl;
+
       logo.onload = () => {
         const drawFrame = () => {
-          if (video.ended || video.paused) {
-            mediaRecorder.stop();
+          if (video.paused || video.ended) {
+            if (recorder.state === 'recording') recorder.stop();
             return;
           }
-          
-          ctx.drawImage(video, 0, 0, width, height);
-          
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-          ctx.fillRect(0, height, width, footerHeight);
-          
-          const logoHeight = 60;
-          const logoWidth = logoHeight * 2;
-          const logoX = 20;
-          const logoY = height + (footerHeight - logoHeight) / 2;
-          ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
-          
-          const lines = [
-            options.verificationUrl,
-            options.timestamp,
-            `Approx. Coordinates: ${options.gpsLat?.toFixed(5)}, ${options.gpsLng?.toFixed(5)}`
-          ];
-          
-          const fontSize = 14;
-          const lineHeight = fontSize * 1.4;
-          ctx.font = `${fontSize}px Arial`;
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-          const textX = logoX + logoWidth + 20;
-          let textY = height + 30;
-          
-          lines.forEach(line => {
-            ctx.fillText(line, textX, textY);
-            textY += lineHeight;
-          });
-          
+
+          ctx.drawImage(video, 0, 0, cw, ch);
+          drawWatermark(ctx, canvas, logo, options, locationText);
           requestAnimationFrame(drawFrame);
         };
-        
         video.play();
         drawFrame();
       };
-      
-      logo.onerror = () => {
-        reject(new Error('Failed to load logo'));
-      };
-      
-      logo.src = options.logoUrl;
+      logo.onerror = () => reject(new Error('Failed to load logo'));
     };
-    
-    video.onerror = () => {
-      reject(new Error('Failed to load video'));
-    };
+    video.onerror = e => reject(e);
   });
 };
-
