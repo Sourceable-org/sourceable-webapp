@@ -31,12 +31,32 @@ const ConfirmScreen = () => {
   const [gpsRadius, setGpsRadius] = useState<number>(5);
 
   useEffect(() => {
-    const storedData = sessionStorage.getItem('captureData');
-    if (!storedData) {
+    const data = sessionStorage.getItem('captureData');
+    if (data) {
+      const parsed = JSON.parse(data);
+      setCaptureData(parsed);
+      
+      // Debug: Check if video has audio
+      if (parsed.mediaType === 'video') {
+        const video = document.createElement('video');
+        video.src = parsed.media;
+        video.onloadedmetadata = () => {
+          console.log('Original video duration:', video.duration);
+          console.log('Original video has audio:', !video.muted && video.volume > 0);
+          
+          // Try to check audio tracks
+          fetch(parsed.media)
+            .then(response => response.blob())
+            .then(blob => {
+              console.log('Original video blob size:', blob.size, 'bytes');
+              console.log('Original video blob type:', blob.type);
+            })
+            .catch(err => console.error('Error checking video blob:', err));
+        };
+      }
+    } else {
       navigate('/');
-      return;
     }
-    setCaptureData(JSON.parse(storedData));
   }, [navigate]);
 
   useEffect(() => {

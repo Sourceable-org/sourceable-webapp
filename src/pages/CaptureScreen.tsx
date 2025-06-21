@@ -51,7 +51,32 @@ export const CaptureScreen: React.FC = () => {
         audio: mode === 'video'
       };
 
+      // Check microphone permissions if we're in video mode
+      if (mode === 'video') {
+        try {
+          const micPermission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          console.log('Microphone permission status:', micPermission.state);
+          
+          if (micPermission.state === 'denied') {
+            setError('Microphone access is required for video recording. Please enable microphone access in your browser settings.');
+            setCameraBusy(false);
+            return;
+          }
+        } catch (err) {
+          console.log('Could not check microphone permission:', err);
+        }
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      // Log the tracks we got
+      const audioTracks = stream.getAudioTracks();
+      const videoTracks = stream.getVideoTracks();
+      console.log('Camera stream - Audio tracks:', audioTracks.length, 'Video tracks:', videoTracks.length);
+      
+      if (mode === 'video' && audioTracks.length === 0) {
+        console.warn('No audio tracks found in video mode');
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -62,7 +87,11 @@ export const CaptureScreen: React.FC = () => {
       setError(null);
     } catch (err) {
       console.error('Camera error:', err);
-      setError('Failed to access camera. Please check your permissions.');
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        setError('Camera and microphone access is required. Please check your permissions.');
+      } else {
+        setError('Failed to access camera. Please check your permissions.');
+      }
     } finally {
       setCameraBusy(false);
     }
@@ -233,8 +262,38 @@ export const CaptureScreen: React.FC = () => {
     }
 
     try {
+      // Check if we have audio tracks in the stream
+      const audioTracks = streamRef.current.getAudioTracks();
+      const videoTracks = streamRef.current.getVideoTracks();
+      console.log('Original stream - Audio tracks:', audioTracks.length, 'Video tracks:', videoTracks.length);
+      
+      if (audioTracks.length > 0) {
+        console.log('Audio track settings:', audioTracks[0].getSettings());
+      }
+
+      // Check for supported MIME types
+      const supportedTypes = [
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
+        'video/webm',
+        'video/mp4'
+      ];
+      
+      let selectedMimeType = null;
+      for (const mimeType of supportedTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          console.log('Using MIME type:', mimeType);
+          break;
+        }
+      }
+      
+      if (!selectedMimeType) {
+        throw new Error('No supported video MIME type found');
+      }
+
       const mediaRecorder = new MediaRecorder(streamRef.current, {
-        mimeType: 'video/webm;codecs=vp8,opus',
+        mimeType: selectedMimeType,
         videoBitsPerSecond: 1000000,
         audioBitsPerSecond: 128000
       });
@@ -250,8 +309,11 @@ export const CaptureScreen: React.FC = () => {
 
       mediaRecorder.onstop = async () => {
         try {
-          const videoBlob = new Blob(chunksRef.current, { type: 'video/webm' });
+          const videoBlob = new Blob(chunksRef.current, { type: selectedMimeType });
           const videoUrl = URL.createObjectURL(videoBlob);
+          
+          console.log('Original video blob size:', videoBlob.size, 'bytes');
+          console.log('Original video blob type:', videoBlob.type);
 
           const location = await getCurrentLocation();
           const timestamps = getCurrentTimestamps();

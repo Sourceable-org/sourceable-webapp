@@ -116,7 +116,7 @@ export const addVideoWatermark = async (
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.src = videoUrl;
-    video.muted = true;
+    video.muted = false; // Don't mute the video for audio processing
 
     video.oncanplay = async () => {
       const canvas = document.createElement('canvas');
@@ -133,20 +133,69 @@ export const addVideoWatermark = async (
       canvas.width = cw;
       canvas.height = ch;
 
-      const stream = canvas.captureStream();
+      // Get video stream from canvas
+      const canvasStream = canvas.captureStream(30); // 30 FPS
+      
+      // Create audio context and connect video audio
       const audioCtx = new AudioContext();
-      const dest = audioCtx.createMediaStreamDestination();
-      const src = audioCtx.createMediaElementSource(video);
-      src.connect(dest);
-      const combined = new MediaStream([
-        ...stream.getVideoTracks(),
-        ...dest.stream.getAudioTracks()
+      const audioSource = audioCtx.createMediaElementSource(video);
+      const audioDestination = audioCtx.createMediaStreamDestination();
+      
+      // Connect audio source to destination
+      audioSource.connect(audioDestination);
+      
+      // Combine video and audio streams
+      const combinedStream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...audioDestination.stream.getAudioTracks()
       ]);
 
-      const recorder = new MediaRecorder(combined, { mimeType: 'video/webm' });
+      // Check if we have audio tracks
+      const hasAudio = combinedStream.getAudioTracks().length > 0;
+      console.log('Watermark processing - Audio tracks found:', hasAudio, combinedStream.getAudioTracks().length);
+
+      // Check for supported MIME types for recording
+      const supportedTypes = [
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
+        'video/webm',
+        'video/mp4'
+      ];
+      
+      let selectedMimeType = null;
+      for (const mimeType of supportedTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          console.log('Watermark using MIME type:', mimeType);
+          break;
+        }
+      }
+      
+      if (!selectedMimeType) {
+        reject(new Error('No supported video MIME type found for watermarking'));
+        return;
+      }
+
+      const recorder = new MediaRecorder(combinedStream, { 
+        mimeType: selectedMimeType,
+        videoBitsPerSecond: 1000000,
+        audioBitsPerSecond: 128000
+      });
+      
       const chunks: Blob[] = [];
-      recorder.ondataavailable = e => chunks.push(e.data);
-      recorder.onstop = () => resolve(URL.createObjectURL(new Blob(chunks, { type: 'video/webm' })));
+      recorder.ondataavailable = e => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+      
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: selectedMimeType });
+        console.log('Watermarked video blob size:', blob.size, 'bytes');
+        console.log('Watermarked video blob type:', blob.type);
+        resolve(URL.createObjectURL(blob));
+      };
+      
       recorder.start();
 
       let locationText = '';
@@ -165,7 +214,9 @@ export const addVideoWatermark = async (
       logo.onload = () => {
         const drawFrame = () => {
           if (video.paused || video.ended) {
-            if (recorder.state === 'recording') recorder.stop();
+            if (recorder.state === 'recording') {
+              recorder.stop();
+            }
             return;
           }
 
@@ -173,11 +224,19 @@ export const addVideoWatermark = async (
           drawWatermark(ctx, canvas, logo, options, locationText);
           requestAnimationFrame(drawFrame);
         };
-        video.play();
+        
+        // Start playing the video to begin recording
+        video.play().catch(err => {
+          console.error('Failed to play video:', err);
+          reject(err);
+        });
+        
         drawFrame();
       };
+      
       logo.onerror = () => reject(new Error('Failed to load logo'));
     };
+    
     video.onerror = e => reject(e);
   });
 };

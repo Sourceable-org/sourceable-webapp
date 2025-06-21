@@ -5,7 +5,6 @@ import ConfirmScreen from './pages/ConfirmScreen';
 import VerifyScreen from './pages/VerifyScreen';
 import DashboardScreen from './pages/DashboardScreen';
 import AnalyticsScreen from './pages/AnalyticsScreen';
-import WatermarkTestScreen from './pages/WatermarkTestScreen';
 
 function App() {
   return (
@@ -18,7 +17,6 @@ function App() {
           <Route path="/verify/:id" element={<VerifyScreen />} />
           <Route path="/dashboard" element={<DashboardScreen />} />
           <Route path="/analytics" element={<AnalyticsScreen />} />
-          <Route path="/watermark-test" element={<WatermarkTestScreen />} />
         </Routes>
       </div>
     </Router>
