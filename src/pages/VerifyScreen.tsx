@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { formatCoordinates, formatApproxCoordinates } from '../utils/gps';
+import { formatCoordinates, formatApproxCoordinates, reverseGeocode } from '../utils/gps';
 import { formatTimestamp } from '../utils/timestamp';
 import { MediaMetadata, supabase } from '../utils/supabase';
 import Map from '../components/Map';
@@ -26,6 +26,7 @@ const VerifyScreen = () => {
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [isProcessingWatermark, setIsProcessingWatermark] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [locationName, setLocationName] = useState<string>('');
   const verificationUrl = `${window.location.origin}/verify/${id}`;
 
   const getMediaType = (url: string): 'image' | 'video' => {
@@ -47,6 +48,17 @@ const VerifyScreen = () => {
 
         if (error) throw error;
         setMetadata(data);
+        
+        // Get location name from coordinates
+        if (data.gps_lat && data.gps_lng) {
+          try {
+            const location = await reverseGeocode(data.gps_lat, data.gps_lng);
+            setLocationName(location);
+          } catch (error) {
+            console.error('Failed to get location name:', error);
+            setLocationName(`${data.gps_lat.toFixed(4)}°N, ${data.gps_lng.toFixed(4)}°W`);
+          }
+        }
       } catch (err) {
         console.error('Failed to fetch metadata:', err);
         setError('Failed to load verification data');
@@ -71,7 +83,7 @@ const VerifyScreen = () => {
       try {
         setIsProcessingWatermark(true);
         const watermarkOptions = {
-          logoUrl: '/images/sourceable.png',
+          logoUrl: '/images/sourceable_wobackground.png',
           verificationUrl: verificationUrl,
           gpsPrecision: convertPrecision(metadata.gps_precision),
           gpsRadiusMiles: metadata.gps_radius_miles,
@@ -81,17 +93,22 @@ const VerifyScreen = () => {
         };
 
         const mediaType = getMediaType(metadata.media_url);
+
+        // Fetch media as blob to avoid CORS for both image and video
+        const response = await fetch(metadata.media_url);
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        let watermarkedUrl;
         if (mediaType === 'video') {
-          setPreviewUrl(metadata.media_url);
+          watermarkedUrl = await addVideoWatermark(localUrl, watermarkOptions);
         } else {
-          // Always fetch as blob to avoid CORS issues
-          const response = await fetch(metadata.media_url);
-          const blob = await response.blob();
-          const localUrl = URL.createObjectURL(blob);
-          const watermarkedUrl = await addWatermark(localUrl, watermarkOptions);
-          setPreviewUrl(watermarkedUrl);
-          URL.revokeObjectURL(localUrl);
+          watermarkedUrl = await addWatermark(localUrl, watermarkOptions);
         }
+        
+        setPreviewUrl(watermarkedUrl);
+        URL.revokeObjectURL(localUrl);
+
       } catch (err) {
         console.error('Failed to create watermarked preview:', err);
         setError('Failed to create preview');
@@ -130,41 +147,14 @@ const VerifyScreen = () => {
   };
 
   const handleDownload = async () => {
-    if (!metadata) return;
+    if (!previewUrl || !metadata) return;
 
-    try {
-      const response = await fetch(metadata.media_url);
-      const blob = await response.blob();
-      const mediaUrl = URL.createObjectURL(blob);
-
-      let watermarkedUrl: string;
-      const watermarkOptions = {
-        logoUrl: '/images/sourceable.png',
-        verificationUrl: verificationUrl,
-        gpsPrecision: convertPrecision(metadata.gps_precision),
-        gpsRadiusMiles: metadata.gps_radius_miles,
-        timestamp: formatTimestamp(metadata.timestamp_local),
-        gpsLat: metadata.gps_lat,
-        gpsLng: metadata.gps_lng,
-      };
-
-      const mediaType = getMediaType(metadata.media_url);
-      if (mediaType === 'video') {
-        watermarkedUrl = await addVideoWatermark(mediaUrl, watermarkOptions);
-      } else {
-        watermarkedUrl = await addWatermark(mediaUrl, watermarkOptions);
-      }
-
-      const a = document.createElement('a');
-      a.href = watermarkedUrl;
-      a.download = `sourceable-${metadata.public_url}.${mediaType === 'video' ? 'webm' : 'jpg'}`;
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(mediaUrl);
-      document.body.removeChild(a);
-    } catch (err) {
-      console.error('Download failed:', err);
-    }
+    const a = document.createElement('a');
+    a.href = previewUrl;
+    a.download = `sourceable-${metadata.public_url}.${getMediaType(metadata.media_url) === 'video' ? 'webm' : 'jpg'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleNewCapture = () => {
@@ -228,14 +218,18 @@ const VerifyScreen = () => {
       {/* Media Card */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="w-full max-w-2xl bg-white rounded-3xl shadow-xl overflow-hidden mb-8">
         <div className="relative">
-          {metadata && getMediaType(metadata.media_url) === 'video' ? (
-            <video src={metadata.media_url} controls className="w-full h-80 object-cover rounded-t-3xl bg-black" />
-          ) : isProcessingWatermark ? (
+          {isProcessingWatermark ? (
             <div className="w-full h-80 flex items-center justify-center bg-gray-100 rounded-t-3xl">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
             </div>
           ) : (
-            <img src={previewUrl} alt="Verified media" className="w-full h-80 object-cover rounded-t-3xl bg-black" />
+            metadata && (
+              getMediaType(metadata.media_url) === 'video' ? (
+                <video src={previewUrl} controls className="w-full object-cover rounded-t-3xl bg-black" />
+              ) : (
+                <img src={previewUrl} alt="Verified media" className="w-full object-cover rounded-t-3xl bg-black" />
+              )
+            )
           )}
         </div>
         {/* Metadata Card */}
@@ -244,7 +238,7 @@ const VerifyScreen = () => {
             {formatTimestamp(metadata.timestamp_local)}
           </div>
           <div className="mb-2 text-gray-700 text-sm">
-            {metadata.gps_lat && metadata.gps_lng ? `${Number(metadata.gps_lat).toFixed(4)}° N,  ${Number(metadata.gps_lng).toFixed(4)}° W` : ''}
+            {locationName || (metadata.gps_lat && metadata.gps_lng ? `${Number(metadata.gps_lat).toFixed(4)}° N,  ${Number(metadata.gps_lng).toFixed(4)}° W` : '')}
           </div>
           <div className="mb-2 text-blue-700 text-sm underline break-all">
             <a href={window.location.href} target="_blank" rel="noopener noreferrer">{window.location.host}/verify/{id}</a>
@@ -270,7 +264,7 @@ const VerifyScreen = () => {
       <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-2xl shadow p-6 flex flex-col items-center">
           <span className="font-bold text-xl mb-2 text-blue-600">Timestamp + GPS</span>
-          <span className="text-gray-700 text-center">{formatTimestamp(metadata.timestamp_local)}<br/>{renderLocationLabel()}</span>
+          <span className="text-gray-700 text-center">{formatTimestamp(metadata.timestamp_local)}<br/>{locationName || renderLocationLabel()}</span>
         </div>
         <div className="bg-white rounded-2xl shadow p-6 flex flex-col items-center">
           <span className="font-bold text-xl mb-2 text-blue-600">Unique verification link</span>

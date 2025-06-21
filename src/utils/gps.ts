@@ -7,6 +7,17 @@ interface GeoLocation {
   timestamp: number;
 }
 
+interface ReverseGeocodeResult {
+  display_name: string;
+  address: {
+    city?: string;
+    town?: string;
+    village?: string;
+    state?: string;
+    country?: string;
+  };
+}
+
 export const getCurrentLocation = (): Promise<{ latitude: number; longitude: number; accuracy: number }> => {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -32,6 +43,57 @@ export const getCurrentLocation = (): Promise<{ latitude: number; longitude: num
       }
     );
   });
+};
+
+export const reverseGeocode = async (latitude: number, longitude: number): Promise<string> => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`,
+      {
+        headers: {
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch location data');
+    }
+    
+    const data: ReverseGeocodeResult = await response.json();
+    
+    // Extract the most relevant location name
+    const address = data.address;
+    const locationParts = [];
+    
+    if (address.city) {
+      locationParts.push(address.city);
+    } else if (address.town) {
+      locationParts.push(address.town);
+    } else if (address.village) {
+      locationParts.push(address.village);
+    }
+    
+    if (address.state) {
+      locationParts.push(address.state);
+    }
+    
+    if (address.country) {
+      locationParts.push(address.country);
+    }
+    
+    // If we couldn't extract specific parts, use the display name
+    if (locationParts.length === 0) {
+      const displayParts = data.display_name.split(', ');
+      return displayParts.slice(0, 2).join(', ');
+    }
+    
+    return locationParts.join(', ');
+  } catch (error) {
+    console.error('Reverse geocoding failed:', error);
+    // Fallback to coordinates if reverse geocoding fails
+    return `${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°W`;
+  }
 };
 
 export const formatCoordinates = (
