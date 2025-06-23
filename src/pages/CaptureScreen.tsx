@@ -45,8 +45,9 @@ export const CaptureScreen: React.FC = () => {
       const constraints = {
         video: {
           facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { min: 640, ideal: 1920, max: 4096 },
+          height: { min: 480, ideal: 1080, max: 2160 },
+          aspectRatio: { ideal: 16 / 9 }
         },
         audio: mode === 'video'
       };

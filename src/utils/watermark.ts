@@ -18,36 +18,36 @@ const drawWatermark = async (
   locationText: string
 ) => {
   // --- Styling ---
-  const startX = canvas.width * 0.04;
-  const pad = canvas.width * 0.02;
+  const startX = canvas.width * 0.05;
+  const pad = canvas.width * 0.025;
   ctx.textAlign = 'left';
   ctx.fillStyle = 'white';
-  ctx.globalAlpha = 0.6;
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-  ctx.shadowBlur = 3;
-  ctx.shadowOffsetX = 1;
-  ctx.shadowOffsetY = 1;
+  ctx.globalAlpha = 0.85;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+  ctx.shadowBlur = 5;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 2;
 
-  let currentY = canvas.height - pad * 1.5;
+  let currentY = canvas.height - pad * 2;
 
   // --- Draw Elements from Bottom to Top ---
 
   // 1. Timestamp
-  const timestampFont = `bold ${canvas.width * 0.022}px Arial`;
+  const timestampFont = `bold ${canvas.width * 0.03}px Arial`;
   ctx.font = timestampFont;
   ctx.fillText(options.timestamp, startX, currentY);
-  currentY -= (canvas.width * 0.03);
+  currentY -= (canvas.width * 0.04);
 
   // 2. Location
   if (locationText) {
-    const locationFont = `bold ${canvas.width * 0.03}px Arial`;
+    const locationFont = `bold ${canvas.width * 0.04}px Arial`;
     ctx.font = locationFont;
     ctx.fillText(locationText, startX, currentY);
-    currentY -= (canvas.width * 0.04);
+    currentY -= (canvas.width * 0.05);
   }
 
   // 3. Logo and Brand Name
-  const logoHeight = canvas.width * 0.06;
+  const logoHeight = canvas.width * 0.09;
   const brandFont = `bold ${logoHeight * 0.95}px Arial`;
   ctx.font = brandFont;
   
@@ -55,13 +55,13 @@ const drawWatermark = async (
   const brandY = currentY - logoHeight / 2;
   ctx.drawImage(logo, startX, brandY - logoHeight / 2, logoHeight, logoHeight);
   ctx.textBaseline = 'middle';
-  const textX = startX + logoHeight + (canvas.width * 0.015);
+  const textX = startX + logoHeight + (canvas.width * 0.02);
   ctx.fillText('SOURCEABLE', textX, brandY);
   currentY -= (logoHeight + pad);
   
   // 4. Verification URL
   ctx.textBaseline = 'alphabetic'; // Reset baseline
-  const urlFont = `${canvas.width * 0.02}px Arial`;
+  const urlFont = `${canvas.width * 0.028}px Arial`;
   ctx.font = urlFont;
   const displayUrl = options.verificationUrl.replace(/^(https?:\/\/)/, '');
   ctx.fillText(displayUrl, startX, currentY);
