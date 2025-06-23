@@ -27,6 +27,7 @@ export const CaptureScreen: React.FC = () => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraBusy, setCameraBusy] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [location, setLocation] = useState<{latitude: number, longitude: number, accuracy: number} | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -45,32 +46,12 @@ export const CaptureScreen: React.FC = () => {
       const constraints = {
         video: {
           facingMode,
-          width: { min: 640, ideal: 1920, max: 4096 },
-          height: { min: 480, ideal: 1080, max: 2160 },
-          aspectRatio: { ideal: 16 / 9 }
         },
         audio: mode === 'video'
       };
 
-      // Check microphone permissions if we're in video mode
-      if (mode === 'video') {
-        try {
-          const micPermission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-          console.log('Microphone permission status:', micPermission.state);
-          
-          if (micPermission.state === 'denied') {
-            setError('Microphone access is required for video recording. Please enable microphone access in your browser settings.');
-            setCameraBusy(false);
-            return;
-          }
-        } catch (err) {
-          console.log('Could not check microphone permission:', err);
-        }
-      }
-
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      // Log the tracks we got
       const audioTracks = stream.getAudioTracks();
       const videoTracks = stream.getVideoTracks();
       console.log('Camera stream - Audio tracks:', audioTracks.length, 'Video tracks:', videoTracks.length);
@@ -87,20 +68,23 @@ export const CaptureScreen: React.FC = () => {
       setIsCameraActive(true);
       setError(null);
     } catch (err) {
-      console.error('Camera error:', err);
-      if (err instanceof Error && err.name === 'NotAllowedError') {
-        setError('Camera and microphone access is required. Please check your permissions.');
+      console.error('Full camera error object:', err);
+      if (err instanceof Error) {
+        console.error('Camera error name:', err.name);
+        console.error('Camera error message:', err.message);
+      }
+
+      if (err instanceof Error && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
+        setError('Camera access is required. Please enable it in your browser settings and try again.');
       } else {
-        setError('Failed to access camera. Please check your permissions.');
+        setError('Failed to access camera. It might be in use by another application.');
       }
     } finally {
       setCameraBusy(false);
     }
   };
 
-  const stopCamera = async () => {
-    setCameraBusy(true);
-
+  const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
@@ -108,9 +92,7 @@ export const CaptureScreen: React.FC = () => {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-
     setIsCameraActive(false);
-    setCameraBusy(false);
   };
 
   const toggleCamera = () => {
@@ -118,55 +100,35 @@ export const CaptureScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    let permissionStatus: PermissionStatus | null = null;
-
-    const initializeCamera = async () => {
+    const initialize = async () => {
       try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const hasCamera = devices.some(device => device.kind === 'videoinput');
-
-        if (!hasCamera) {
-          setError('No camera found on your device.');
-          return;
-        }
-
-        permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
-
-        const handlePermissionChange = () => {
-          if (permissionStatus?.state === 'granted') {
-            startCamera();
-          } else if (permissionStatus?.state === 'denied') {
-            stopCamera();
-            setError('Camera access is blocked. Please enable camera access in your browser settings.');
-          }
-        };
-
-        permissionStatus.onchange = handlePermissionChange;
-
-        if (permissionStatus.state === 'granted' || permissionStatus.state === 'prompt') {
-          startCamera();
-        } else {
-          setError('Camera access is blocked. Please enable camera access in your browser settings.');
-        }
+        const loc = await getCurrentLocation();
+        setLocation(loc);
+        await startCamera();
       } catch (err) {
-        startCamera();
+        if (err instanceof Error && err.message.includes('User denied Geolocation')) {
+          setError('Location access is required to use the camera. Please enable it in your browser settings.');
+        } else {
+          setError('Failed to initialize. Please try again.');
+        }
+        console.error('Initialization error:', err);
       }
     };
-
-    initializeCamera();
+    
+    initialize();
 
     return () => {
       stopCamera();
-      if (permissionStatus) {
-        permissionStatus.onchange = null;
-      }
     };
   }, []);
 
   useEffect(() => {
+    if (!isCameraActive) return; 
+    
     const switchCamera = async () => {
-      await stopCamera();
-      await startCamera();
+      stopCamera();
+      await new Promise(resolve => setTimeout(resolve, 100)); // Short delay to release camera
+      startCamera();
     };
 
     switchCamera();
@@ -221,16 +183,19 @@ export const CaptureScreen: React.FC = () => {
         throw new Error('Could not get canvas context');
       }
 
+      if (!location) {
+        throw new Error('Location data is not available.');
+      }
+
       ctx.drawImage(videoRef.current, 0, 0);
 
       const imageBlob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(blob => {
           if (blob) resolve(blob);
           else reject(new Error('Failed to create image blob'));
-        }, 'image/jpeg', 0.8);
+        }, 'image/jpeg', 0.9);
       });
 
-      const location = await getCurrentLocation();
       const timestamps = getCurrentTimestamps();
 
       const angle = screen.orientation?.angle ?? (window.orientation as number) ?? 0;
@@ -238,11 +203,7 @@ export const CaptureScreen: React.FC = () => {
       const captureData: CaptureData = {
         media: URL.createObjectURL(imageBlob),
         mediaType: 'image',
-        location: {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          accuracy: location.accuracy
-        },
+        location,
         timestamps,
         facingMode,
         rotationAngle: angle
@@ -251,7 +212,11 @@ export const CaptureScreen: React.FC = () => {
       sessionStorage.setItem('captureData', JSON.stringify(captureData));
       navigate('/confirm');
     } catch (err) {
-      setError('Failed to capture image. Please try again.');
+      if (err instanceof Error && err.message.includes('User denied Geolocation')) {
+        setError('Location access is required to capture photos. Please enable it in your browser settings.');
+      } else {
+        setError('Failed to capture image. Please try again.');
+      }
       console.error('Capture error:', err);
     }
   };
@@ -313,10 +278,13 @@ export const CaptureScreen: React.FC = () => {
           const videoBlob = new Blob(chunksRef.current, { type: selectedMimeType });
           const videoUrl = URL.createObjectURL(videoBlob);
           
+          if (!location) {
+            throw new Error('Location data is not available.');
+          }
+
           console.log('Original video blob size:', videoBlob.size, 'bytes');
           console.log('Original video blob type:', videoBlob.type);
 
-          const location = await getCurrentLocation();
           const timestamps = getCurrentTimestamps();
 
           const angle = screen.orientation?.angle ?? (window.orientation as number) ?? 0;
@@ -324,11 +292,7 @@ export const CaptureScreen: React.FC = () => {
           const captureData: CaptureData = {
             media: videoUrl,
             mediaType: 'video',
-            location: {
-              latitude: location.latitude,
-              longitude: location.longitude,
-              accuracy: location.accuracy
-            },
+            location,
             timestamps,
             facingMode,
             rotationAngle: angle
@@ -337,7 +301,11 @@ export const CaptureScreen: React.FC = () => {
           sessionStorage.setItem('captureData', JSON.stringify(captureData));
           navigate('/confirm');
         } catch (err) {
-          setError('Failed to process video. Please try again.');
+          if (err instanceof Error && err.message.includes('User denied Geolocation')) {
+            setError('Location access is required to record videos. Please enable it in your browser settings.');
+          } else {
+            setError('Failed to process video. Please try again.');
+          }
           console.error('Video processing error:', err);
         }
       };
@@ -378,25 +346,14 @@ export const CaptureScreen: React.FC = () => {
             <div className="bg-white rounded-2xl shadow-xl max-w-sm mx-4 overflow-hidden">
               <div className="p-6">
                 <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
-                  Camera Access Required
+                  Permission Required
                 </h3>
                 <p className="text-gray-600 text-center mb-6">{error}</p>
                 <div className="flex flex-col gap-3">
                   <button
                     onClick={async () => {
                       setError(null);
-                      try {
-                        const permissions = await navigator.permissions.query({
-                          name: 'camera' as PermissionName
-                        });
-                        if (permissions.state === 'granted' || permissions.state === 'prompt') {
-                          await startCamera();
-                        } else {
-                          setError('Camera access is still blocked. Please enable camera access in your browser settings.');
-                        }
-                      } catch {
-                        await startCamera();
-                      }
+                      await startCamera();
                     }}
                     className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition-colors font-medium"
                   >
